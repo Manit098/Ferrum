@@ -33,6 +33,7 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 from urllib.parse import urlsplit
 
 from ferrum.config_store import (
@@ -51,6 +52,31 @@ from ferrum.config_store import (
     save as save_file,
 )
 
+# Explicit public surface: the names other modules are meant to import.
+# (mypy's no_implicit_reexport only honours re-exports listed here.)
+__all__ = [
+    "CLOUD_PRESET_URL",
+    "DEFAULT_PROFILE",
+    "INT_FIELDS",
+    "LOCAL_PRESET_URL",
+    "PROFILES",
+    "PROFILE_ENV",
+    "STR_FIELDS",
+    "Config",
+    "ConfigError",
+    "config_file_path",
+    "host_of",
+    "is_local_endpoint",
+    "load_config",
+    "mask_secret",
+    "normalize_base_url",
+    "profile_values",
+    "read_config_file",
+    "setting_source",
+    "write_config_value",
+    "write_config_values",
+]
+
 LOCAL_PRESET_URL = "http://localhost:11434/v1"
 CLOUD_PRESET_URL = "https://api.routeway.ai/v1"
 
@@ -62,9 +88,11 @@ def config_file_path() -> Path:
         base = os.environ.get("APPDATA")
         root = Path(base) if base else Path.home() / ".config"
     else:
-        root = Path(os.environ.get("XDG_CONFIG_HOME")) if os.environ.get(
-            "XDG_CONFIG_HOME"
-        ) else Path.home() / ".config"
+        root = (
+            Path(os.environ.get("XDG_CONFIG_HOME"))
+            if os.environ.get("XDG_CONFIG_HOME")
+            else Path.home() / ".config"
+        )
     return root / "ferrum" / "config.json"
 
 
@@ -73,7 +101,7 @@ def read_config_file() -> dict[str, object]:
     return load_file(config_file_path())
 
 
-def _active(data: dict) -> str:
+def _active(data: dict[str, object]) -> str:
     name = data.get("active")
     return name if isinstance(name, str) and name in PROFILES else DEFAULT_PROFILE
 
@@ -86,10 +114,11 @@ def profile_values(profile: str | None = None) -> dict[str, str]:
         raise ConfigError(
             f"unknown profile {name!r}; choose from: " + ", ".join(PROFILES)
         )
-    values = data.get(name, {})
+    values = data.get(name)
+    stored = values if isinstance(values, dict) else {}
     return {
         key: value
-        for key, value in values.items()
+        for key, value in stored.items()
         if key in STR_FIELDS and isinstance(value, str)
     }
 
@@ -97,9 +126,7 @@ def profile_values(profile: str | None = None) -> dict[str, str]:
 # -- writing --------------------------------------------------------------
 
 
-def write_config_values(
-    values: dict[str, str], *, profile: str | None = None
-) -> Path:
+def write_config_values(values: dict[str, str], *, profile: str | None = None) -> Path:
     """Merge settings into the config file; an empty value removes the key.
 
     String settings land in ``profile`` (or the profile this call switches
@@ -109,7 +136,8 @@ def write_config_values(
     _check_keys(values)
     data = read_config_file()
     target = _target_profile(data, values, profile)
-    settings = dict(data.get(target, {})) if isinstance(data.get(target), dict) else {}
+    stored = data.get(target)
+    settings = dict(stored) if isinstance(stored, dict) else {}
 
     for key, value in values.items():
         if key == "active":
@@ -128,9 +156,7 @@ def write_config_values(
     return path
 
 
-def write_config_value(
-    key: str, value: str, *, profile: str | None = None
-) -> Path:
+def write_config_value(key: str, value: str, *, profile: str | None = None) -> Path:
     return write_config_values({key: value}, profile=profile)
 
 
@@ -143,7 +169,9 @@ def _check_keys(values: dict[str, str]) -> None:
             )
 
 
-def _target_profile(data: dict, values: dict[str, str], profile: str | None) -> str:
+def _target_profile(
+    data: dict[str, object], values: dict[str, str], profile: str | None
+) -> str:
     name = profile or values.get("active") or _active(data)
     return _profile_name(name)
 
@@ -156,7 +184,7 @@ def _profile_name(name: object) -> str:
     return str(name)
 
 
-def _set_int(data: dict, key: str, value: str) -> None:
+def _set_int(data: dict[str, object], key: str, value: str) -> None:
     if value == "":
         data.pop(key, None)
         return
@@ -166,7 +194,7 @@ def _set_int(data: dict, key: str, value: str) -> None:
         raise ConfigError(f"{key} must be an integer, got {value!r}") from exc
 
 
-def _set_string(settings: dict, key: str, value: str) -> None:
+def _set_string(settings: dict[str, str], key: str, value: str) -> None:
     if value == "":
         settings.pop(key, None)
     else:
@@ -221,7 +249,9 @@ class Config:
         if self.profile not in PROFILES:
             raise ConfigError("profile must be one of: " + ", ".join(PROFILES))
         if not isinstance(self.base_url, str) or not self.base_url.strip():
-            raise ConfigError(f"base_url must be a non-empty string, got {self.base_url!r}")
+            raise ConfigError(
+                f"base_url must be a non-empty string, got {self.base_url!r}"
+            )
         parts = urlsplit(self.base_url)
         if parts.scheme not in {"http", "https"} or not parts.netloc:
             raise ConfigError(f"base_url must be an http(s) URL, got {self.base_url!r}")
@@ -275,7 +305,7 @@ def load_config(**overrides: object) -> Config:
     return _build(values)
 
 
-def _file_limits(data: dict) -> dict[str, object]:
+def _file_limits(data: dict[str, object]) -> dict[str, object]:
     path = config_file_path()
     limits: dict[str, object] = {}
     for name in INT_FIELDS:
@@ -287,7 +317,7 @@ def _file_limits(data: dict) -> dict[str, object]:
     return limits
 
 
-def _resolve_profile(data: dict, requested: object) -> str:
+def _resolve_profile(data: dict[str, object], requested: object) -> str:
     profile = requested or os.environ.get(PROFILE_ENV) or _active(data)
     if profile not in PROFILES:
         raise ConfigError(
@@ -296,7 +326,7 @@ def _resolve_profile(data: dict, requested: object) -> str:
     return str(profile)
 
 
-def _file_profile(data: dict, profile: str) -> dict[str, object]:
+def _file_profile(data: dict[str, object], profile: str) -> dict[str, object]:
     stored = data.get(profile, {})
     values: dict[str, object] = {}
     if isinstance(stored, dict):
@@ -325,6 +355,8 @@ def _env_values() -> dict[str, object]:
 
 def _build(values: dict[str, object]) -> Config:
     try:
-        return Config(**values)
+        # The keys already come from the schema vocabulary; the constructor
+        # validates every value, so the loose dict is intentional here.
+        return Config(**cast(dict[str, Any], values))
     except TypeError as exc:
         raise ConfigError(str(exc)) from exc

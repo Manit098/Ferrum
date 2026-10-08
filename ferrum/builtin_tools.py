@@ -1,8 +1,10 @@
-"""The read-only tools the model calls: list, read, search."""
+"""The tools the model calls: list, read, search, and run one command."""
 
 from __future__ import annotations
 
+import os
 import re
+import shlex
 from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any, ClassVar
@@ -11,8 +13,13 @@ from ferrum.config import Config
 from ferrum.context import collect_files, limit_entries
 from ferrum.safety import PathEscapeError, is_denied, safe_join
 from ferrum.tools import Tool, ToolError, ToolRegistry, ToolResult, _require_string
+from ferrum.verifier import run_command
 
 MAX_LINE_CHARS = 300
+
+# Shell plumbing is refused: commands run as one program with its arguments,
+# so a model cannot chain, pipe, or redirect its way past the project root.
+SHELL_CHARS = frozenset(";|&<>`\n")
 
 
 class ListFiles(Tool):
@@ -167,9 +174,7 @@ class SearchCode(Tool):
             raise ToolError(f"invalid regular expression: {exc}") from exc
         return pattern, start, rx
 
-    def _search(
-        self, rx: re.Pattern[str], start: Path
-    ) -> tuple[list[str], bool]:
+    def _search(self, rx: re.Pattern[str], start: Path) -> tuple[list[str], bool]:
         """path:line snippets, stopping once the result cap is reached."""
         matches: list[str] = []
         truncated = False
@@ -194,10 +199,128 @@ class SearchCode(Tool):
         return matches, truncated
 
 
+class RunCommand(Tool):
+    name = "run_command"
+    description = (
+        "Run one build, test, or analysis command in the project and return "
+        "its output and exit code. One command per call; shell features "
+        "(pipes, redirection, chaining) are not supported. Use it to "
+        "reproduce a failure, read real compiler diagnostics, or run the "
+        "program before and after a patch."
+    )
+    parameters: ClassVar[dict[str, Any]] = {
+        "type": "object",
+        "properties": {
+            "command": {
+                "type": "string",
+                "description": (
+                    "The command line to run, e.g. `make test` or "
+                    "`clang -Wall -o main main.c`."
+                ),
+            },
+            "cwd": {
+                "type": "string",
+                "description": (
+                    "Optional subdirectory to run in, relative to the project root."
+                ),
+            },
+            "timeout": {
+                "type": "integer",
+                "description": (
+                    "Seconds to wait before killing the command "
+                    "(capped at the configured command timeout)."
+                ),
+            },
+        },
+        "required": ["command"],
+    }
+
+    def __init__(self, root: Path, config: Config | None = None) -> None:
+        self.root = Path(root)
+        self.config = config or Config()
+
+    def execute(self, arguments: Mapping[str, Any]) -> ToolResult:
+        argv = _split_command(_require_string(arguments, "command"))
+        cwd = self._cwd(arguments)
+        timeout = self._timeout(arguments)
+        return ToolResult.success(run_command(argv, cwd, timeout=timeout).render())
+
+    def _cwd(self, arguments: Mapping[str, Any]) -> Path:
+        sub = arguments.get("cwd") or ""
+        if not isinstance(sub, str):
+            raise ToolError("cwd must be a string")
+        if not sub:
+            return self.root
+        if is_denied(PurePosixPath(sub.replace("\\", "/"))):
+            raise ToolError(f"refused: {sub} is excluded")
+        try:
+            start = safe_join(self.root, sub)
+        except PathEscapeError as exc:
+            raise ToolError(str(exc)) from exc
+        if not start.is_dir():
+            raise ToolError(f"not a directory: {sub}")
+        return start
+
+    def _timeout(self, arguments: Mapping[str, Any]) -> int:
+        limit = self.config.command_timeout
+        raw = arguments.get("timeout")
+        if raw is None:
+            return limit
+        if isinstance(raw, bool) or not isinstance(raw, int) or raw <= 0:
+            raise ToolError(f"timeout must be a positive integer, got {raw!r}")
+        return min(raw, limit)
+
+
+def _split_command(command: str) -> list[str]:
+    """One command line -> argv, refusing shell plumbing outside quotes."""
+    outside = _unquoted(command)
+    if (SHELL_CHARS & set(outside)) or "$(" in outside:
+        raise ToolError(
+            "shell features are not supported (pipes, redirection, chaining); "
+            "run a single command with its arguments"
+        )
+    try:
+        argv = shlex.split(command, posix=os.name != "nt")
+    except ValueError as exc:
+        raise ToolError(f"cannot parse command: {exc}") from exc
+    if os.name == "nt":
+        # posix=False keeps the quotes in the token; drop the matched pair.
+        argv = [
+            token[1:-1]
+            if len(token) > 1 and token[0] == token[-1] and token[0] in "\"'"
+            else token
+            for token in argv
+        ]
+    if not argv:
+        raise ToolError("command is empty")
+    return argv
+
+
+def _unquoted(command: str) -> str:
+    """The command with quoted spans removed, so payload text is not scanned."""
+    out: list[str] = []
+    quote: str | None = None
+    for char in command:
+        if quote is not None:
+            if char == quote:
+                quote = None
+            continue
+        if char in "\"'":
+            quote = char
+            continue
+        out.append(char)
+    return "".join(out)
+
+
 def default_tools(root: Path, config: Config | None = None) -> ToolRegistry:
-    """The standard read-only set."""
+    """The standard set: three readers plus one runner."""
     config = config or Config()
     registry = ToolRegistry()
-    for tool in (ListFiles(root, config), ReadFile(root, config), SearchCode(root, config)):
+    for tool in (
+        ListFiles(root, config),
+        ReadFile(root, config),
+        SearchCode(root, config),
+        RunCommand(root, config),
+    ):
         registry.register(tool)
     return registry

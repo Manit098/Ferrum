@@ -6,7 +6,10 @@ all: example
 example: main.c
 	$(CC) $(CFLAGS) -o $@ $<
 
+test: example
+	./example
+
 clean:
 	rm -f example example.exe
 
-.PHONY: all clean
+.PHONY: all test clean

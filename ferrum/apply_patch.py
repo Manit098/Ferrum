@@ -16,7 +16,7 @@ from ferrum.patch import Patch, format_unified_diff
 from ferrum.safety import PathEscapeError, is_denied, safe_join
 from ferrum.tools import Tool, ToolError, ToolResult, _require_string
 from ferrum.ui import Console
-from ferrum.verifier import Verifier, VerifyOutcome
+from ferrum.verifier import Verifier, VerifyOutcome, run_command
 
 DRY_RUN_RESULT = (
     "Dry run: the patch was NOT applied to {rel}"
@@ -25,9 +25,10 @@ DRY_RUN_RESULT = (
 )
 
 DECLINED_RESULT = (
-    "The user declined this patch. Do not apply it. "
-    "Ask what they would prefer or stop."
+    "The user declined this patch. Do not apply it. Ask what they would prefer or stop."
 )
+
+GIT_TIMEOUT = 15
 
 
 class ApplyPatch(Tool):
@@ -36,7 +37,9 @@ class ApplyPatch(Tool):
         "Replace exact text in a project file after showing the diff and "
         "asking the user. The old text must match the file verbatim and "
         "uniquely. After a successful patch the project is built and "
-        "tested; the verification output comes back in the result."
+        "tested; in a git work tree the result also carries git's status "
+        "and diff for the file, and the verification output comes back "
+        "afterwards."
     )
     parameters: ClassVar[dict[str, Any]] = {
         "type": "object",
@@ -102,6 +105,9 @@ class ApplyPatch(Tool):
         report = f"Patch applied to {rel}."
         if description:
             report += f" ({description})"
+        git_section = _git_report(self.root, rel)
+        if git_section:
+            report += "\n\n--- git ---\n" + git_section
         if self.verifier is None:
             return report + "\n(verification unavailable)"
         live = (
@@ -166,3 +172,26 @@ def _write(target: Path, updated: str, crlf: bool, rel: str) -> None:
         target.write_bytes(out.encode("utf-8"))
     except OSError as exc:
         raise ToolError(f"cannot write {rel}: {exc}") from exc
+
+
+def _git_report(root: Path, rel: str) -> str | None:
+    """What git sees for this file after the write.
+
+    Returns None when git is missing or root is not a work tree, so projects
+    outside version control never pay for the extra sections.
+    """
+    probe = run_command(
+        ["git", "rev-parse", "--is-inside-work-tree"], root, timeout=GIT_TIMEOUT
+    )
+    if not probe.ok or probe.stdout.strip() != "true":
+        return None
+    status = run_command(
+        ["git", "status", "--porcelain", "--", rel], root, timeout=GIT_TIMEOUT
+    )
+    lines = [status.stdout.strip() or "(no changes against the index)"]
+    diff = run_command(
+        ["git", "diff", "--no-color", "--", rel], root, timeout=GIT_TIMEOUT
+    )
+    if diff.stdout.strip():
+        lines.append(diff.stdout.strip())
+    return "\n".join(lines)

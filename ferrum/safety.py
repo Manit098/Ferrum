@@ -117,8 +117,10 @@ def is_denied(rel_path: str | PurePosixPath) -> bool:
     rel = PurePosixPath(str(rel_path).replace("\\", "/"))
     if any(part in DENIED_DIRS for part in rel.parts):
         return True
-    if any(rel.match(p) or PurePosixPath(rel.as_posix().lower()).match(p)
-           for p in SENSITIVE_PATTERNS):
+    if any(
+        rel.match(p) or PurePosixPath(rel.as_posix().lower()).match(p)
+        for p in SENSITIVE_PATTERNS
+    ):
         return True
     name = rel.name.lower()
     return any(name.endswith(suffix) for suffix in DENIED_SUFFIXES)

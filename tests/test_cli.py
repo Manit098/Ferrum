@@ -287,7 +287,7 @@ def test_dry_run_without_fix_is_usage_error(capsys):
 
 def test_dry_run_bare_is_usage_error(capsys):
     assert main(["--dry-run"]) == 1
-    assert 'ferrum fix --dry-run' in capsys.readouterr().err
+    assert "ferrum fix --dry-run" in capsys.readouterr().err
 
 
 def test_doctor_ready_when_model_and_endpoint_work(monkeypatch, capsys):
@@ -366,7 +366,6 @@ def test_status_lines_go_to_stderr(project, capsys):
     assert "reading project" in captured.err
     assert "reading project" not in captured.out
     assert "Files:" in captured.out  # the summary stays on stdout
-
 
 
 def test_config_show_lists_both_profiles(isolated_config, capsys):

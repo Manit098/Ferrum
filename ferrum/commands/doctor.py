@@ -80,14 +80,17 @@ def _probe_endpoint(config: Config, console: Console) -> tuple[list[str], list[s
 
 def _toolchain_report() -> list[str]:
     """Print the build tools found; note what fix mode cannot verify."""
-    found = [tool for tool in ("clang", "gcc", "make", "cargo", "cmake")
-             if shutil.which(tool)]
+    found = [
+        tool
+        for tool in ("clang", "gcc", "make", "cargo", "cmake")
+        if shutil.which(tool)
+    ]
     print(f"{'toolchain':<12}{', '.join(found) if found else 'nothing found'}")
     warnings: list[str] = []
     if not {"clang", "gcc"} & set(found):
         warnings.append("no C compiler — fix mode cannot verify C builds")
     if not found:
-        warnings.append("nothing to verify builds with; run commands are unavailable")
+        warnings.append("no build tool found — fix mode cannot verify a fix")
     return warnings
 
 

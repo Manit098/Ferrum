@@ -13,7 +13,7 @@ from ferrum.apply_patch import ApplyPatch
 from ferrum.config import Config
 from ferrum.context import ProjectContext
 from ferrum.model import ModelProvider, ModelResponse
-from ferrum.toolcalls import MALFORMED_JSON, extract_tool_calls
+from ferrum.toolcalls import MALFORMED_JSON, ToolCall, extract_tool_calls
 from ferrum.tools import ToolRegistry, ToolResult
 from ferrum.ui import Console
 from ferrum.verifier import Verifier
@@ -33,13 +33,15 @@ READ_ONLY_NOTE = (
     "Read-only mode: investigate thoroughly before answering. A directory "
     "listing alone is not an answer — read the relevant source files and "
     "search for the relevant names; several tool calls are expected. You "
-    "cannot modify files, so do not call apply_patch."
+    "cannot modify files, so do not call apply_patch; run_command is "
+    "available for builds, tests, and running the program."
 )
 
 FIX_NOTE = (
     "Fix mode: inspect thoroughly before patching — read the file you are "
     "about to change and its callers; several tool calls are expected. "
-    "Call apply_patch only with text you have read in this session."
+    "Reproduce the failure with run_command first when a build or test can "
+    "show it. Call apply_patch only with text you have read in this session."
 )
 
 DRY_RUN_NOTE = (
@@ -66,6 +68,7 @@ PROGRESS = {
     "list_files": "inspecting the project",
     "read_file": "reading",
     "search_code": "searching",
+    "run_command": "running",
     "apply_patch": "proposing a patch to",
 }
 
@@ -147,7 +150,9 @@ class Agent:
             edit=edit,
         )
 
-    def _run_tools(self, response, state: _TurnState) -> list[dict[str, Any]]:
+    def _run_tools(
+        self, response: ModelResponse, state: _TurnState
+    ) -> list[dict[str, Any]]:
         """Run every requested tool, one tool message per call."""
         state.used_tools = True
         messages: list[dict[str, Any]] = []
@@ -205,7 +210,7 @@ class Agent:
         with self.ui.live(f"asking {model}"):
             return self.provider.complete(messages, tools)
 
-    def _execute(self, call) -> ToolResult:
+    def _execute(self, call: ToolCall) -> ToolResult:
         if MALFORMED_JSON in call.arguments:
             raw = str(call.arguments[MALFORMED_JSON])[:500]
             return ToolResult.failure(
@@ -217,12 +222,14 @@ class Agent:
             return ToolResult.failure("tool call had no name")
         return self.registry.execute(call.name, call.arguments)
 
-    def _progress(self, call) -> None:
+    def _progress(self, call: ToolCall) -> None:
         label = PROGRESS.get(call.name, call.name)
         if call.name in ("read_file", "apply_patch"):
             detail = f" {call.arguments.get('path', '')}"
         elif call.name == "search_code":
             detail = f" {call.arguments.get('pattern', '')!r}"
+        elif call.name == "run_command":
+            detail = f" {str(call.arguments.get('command', ''))[:60]}"
         else:
             detail = ""
         text = f"{label}{detail}"
@@ -231,7 +238,9 @@ class Agent:
         elif self.printer is not None:
             self.printer(f"Ferrum > {text}...")
 
-    def _finish(self, text: str, turns: int, *, capped: bool, edit: bool) -> AgentResult:
+    def _finish(
+        self, text: str, turns: int, *, capped: bool, edit: bool
+    ) -> AgentResult:
         if not text:
             text = "The model returned no answer."
         patched = bool(self.apply_tool and self.apply_tool.applied)
@@ -277,7 +286,9 @@ def _nudge_for(response: ModelResponse, state: _TurnState) -> str | None:
     return None
 
 
-def _merge_tool_calls(native: list, extracted: list) -> list:
+def _merge_tool_calls(
+    native: list[ToolCall], extracted: list[ToolCall]
+) -> list[ToolCall]:
     """Native calls first, then JSON-from-text calls that are not duplicates."""
     seen = {(c.name, json.dumps(c.arguments, sort_keys=True)) for c in native}
     merged = list(native)

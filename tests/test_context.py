@@ -118,12 +118,7 @@ def _full_project(tmp_path):
     root = tmp_path / "proj"
     root.mkdir()
     (root / ".gitignore").write_text(
-        "*.log\n"
-        "ignored_dir/\n"
-        "secret.txt\n"
-        "secret_src.c\n"
-        "*.gen.rs\n"
-        "!keep.gen.rs\n",
+        "*.log\nignored_dir/\nsecret.txt\nsecret_src.c\n*.gen.rs\n!keep.gen.rs\n",
         encoding="utf-8",
     )
     (root / "main.c").write_text("int main(void) { return 0; }\n", encoding="utf-8")

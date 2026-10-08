@@ -99,7 +99,12 @@ def test_read_only_never_offers_apply_patch(tmp_path, project):
     agent.run("look around", project)
     tool_names = [fn["function"]["name"] for fn in provider.schemas[0]]
     assert "apply_patch" not in tool_names
-    assert set(tool_names) == {"list_files", "read_file", "search_code"}
+    assert set(tool_names) == {
+        "list_files",
+        "read_file",
+        "search_code",
+        "run_command",
+    }
 
 
 def test_unknown_tool_is_reported_back(tmp_path, project):
@@ -127,8 +132,7 @@ def test_malformed_json_arguments_get_actionable_feedback(tmp_path, project):
 
 def test_iteration_cap_stops_the_loop(tmp_path, project):
     scripted = [
-        ModelResponse("", [ToolCall(str(i), "list_files", {})])
-        for i in range(5)
+        ModelResponse("", [ToolCall(str(i), "list_files", {})]) for i in range(5)
     ]
     provider = FakeProvider(*scripted)
     result = _agent(tmp_path, provider, config=Config(max_iterations=2)).run(
@@ -272,7 +276,9 @@ def test_edit_mode_loop_patches_and_verifies(tmp_path, project):
     verifier = FakeVerifier(PASSING)
     printed = []
     agent = _agent(tmp_path, provider, verifier=verifier, printer=printed.append)
-    result = agent.run("make main.c return 1", project, edit=True, confirm=lambda p: True)
+    result = agent.run(
+        "make main.c return 1", project, edit=True, confirm=lambda p: True
+    )
 
     assert (tmp_path / "main.c").read_text(encoding="utf-8") != original
     assert "return 1;" in (tmp_path / "main.c").read_text(encoding="utf-8")
@@ -355,12 +361,13 @@ def test_dry_run_shows_diff_but_never_writes(tmp_path, project):
 def test_dry_run_tool_in_isolation(source):
     ui_lines = []
     tool = ApplyPatch(
-        source, lambda p: True, ui=ui_lines.append,
-        verifier=FakeVerifier(PASSING), dry_run=True,
+        source,
+        lambda p: True,
+        ui=ui_lines.append,
+        verifier=FakeVerifier(PASSING),
+        dry_run=True,
     )
-    result = tool.execute(
-        {"path": "main.c", "old": "return 0;", "new": "return 1;"}
-    )
+    result = tool.execute({"path": "main.c", "old": "return 0;", "new": "return 1;"})
     assert result.ok
     assert "return 0;" in (source / "main.c").read_text(encoding="utf-8")
     assert tool.applied is False
@@ -450,3 +457,52 @@ def test_apply_patch_failure_feeds_back_through_registry(source):
     )
     assert result.ok is False
     assert result.to_model_message().startswith("ERROR:")
+
+
+# --- git integration ---
+
+
+def _git(*args, root):
+    import subprocess
+
+    return subprocess.run(
+        ["git", *args], cwd=str(root), capture_output=True, text=True, check=False
+    )
+
+
+def _in_work_tree(root) -> bool:
+    import shutil as _shutil
+
+    if _shutil.which("git") is None:
+        return False
+    return _git("rev-parse", "--is-inside-work-tree", root=root).returncode == 0
+
+
+def test_apply_patch_reports_git_status_and_diff(source):
+    import shutil
+
+    if shutil.which("git") is None:
+        pytest.skip("git not installed")
+    assert _git("init", "-q", root=source).returncode == 0
+    assert _git("add", "main.c", root=source).returncode == 0
+
+    ui_lines = []
+    tool = _tool(source, verifier=FakeVerifier(PASSING), ui=ui_lines.append)
+    result = tool.execute({"path": "main.c", "old": "return 0;", "new": "return 1;"})
+
+    assert result.ok
+    assert "--- git ---" in result.text
+    assert "main.c" in result.text  # porcelain status names the file
+    assert "+    return 1;" in result.text  # the real diff git computed
+    # the pre-write diff still goes to the user on stdout
+    assert "--- a/main.c" in "".join(ui_lines)
+
+
+def test_apply_patch_omits_git_section_outside_a_repo(source):
+    if _in_work_tree(source):
+        pytest.skip("tmp_path sits inside a git work tree")
+    tool = _tool(source, verifier=FakeVerifier(PASSING))
+    result = tool.execute({"path": "main.c", "old": "return 0;", "new": "return 1;"})
+    assert result.ok
+    assert "--- git ---" not in result.text
+    assert "--- verification ---" in result.text

@@ -1,12 +1,21 @@
-"""Tests for the tool interface, registry, and read-only tools."""
+"""Tests for the tool interface, registry, and the built-in tools."""
 
+import os
+import sys
 from typing import Any, ClassVar
 
 import pytest
 
-from ferrum.builtin_tools import ListFiles, ReadFile, SearchCode, default_tools
+from ferrum.builtin_tools import (
+    ListFiles,
+    ReadFile,
+    RunCommand,
+    SearchCode,
+    default_tools,
+)
 from ferrum.config import Config
 from ferrum.tools import Tool, ToolError, ToolRegistry, ToolResult
+from ferrum.verifier import CommandResult
 
 
 class EchoTool(Tool):
@@ -123,7 +132,12 @@ def test_non_mapping_arguments_rejected():
 
 def test_default_tools_names(project):
     registry = default_tools(project)
-    assert registry.names() == ["list_files", "read_file", "search_code"]
+    assert registry.names() == [
+        "list_files",
+        "read_file",
+        "search_code",
+        "run_command",
+    ]
 
 
 def test_list_files_happy_path(project):
@@ -258,3 +272,122 @@ def test_search_result_cap(project):
 def test_search_requires_pattern(project):
     with pytest.raises(ToolError, match="pattern is required"):
         SearchCode(project).execute({})
+
+
+# --- run_command ---
+
+
+def _python(code: str) -> str:
+    return f'"{sys.executable}" -c "{code}"'
+
+
+def test_run_command_runs_and_reports(project):
+    result = RunCommand(project).execute({"command": _python("print(6*7)")})
+    assert result.ok
+    assert "42" in result.text
+    assert "[exit 0]" in result.text
+    assert result.text.startswith("$ ")
+
+
+def test_run_command_failure_still_returns_output(project):
+    result = RunCommand(project).execute(
+        {"command": _python("import sys; sys.stderr.write('bad'); sys.exit(3)")}
+    )
+    assert result.ok  # a failing command is a result, not a tool error
+    assert "bad" in result.text
+    assert "[exit 3]" in result.text
+
+
+def test_run_command_requires_command(project):
+    with pytest.raises(ToolError, match="command is required"):
+        RunCommand(project).execute({})
+
+
+def test_run_command_rejects_shell_features(project):
+    tool = RunCommand(project)
+    for command in (
+        "echo a | grep a",
+        "make && make test",
+        "ls > out.txt",
+        "true; echo nope",
+        "echo `hostname`",
+    ):
+        with pytest.raises(ToolError, match="shell features"):
+            tool.execute({"command": command})
+
+
+def test_run_command_cwd_subdirectory(project):
+    (project / "sub").mkdir()
+    result = RunCommand(project).execute(
+        {
+            "command": _python("import os; print(os.path.basename(os.getcwd()))"),
+            "cwd": "sub",
+        }
+    )
+    assert "sub" in result.text
+
+
+def test_run_command_cwd_escape_rejected(project):
+    with pytest.raises(ToolError, match="escapes project root"):
+        RunCommand(project).execute({"command": "make", "cwd": "../"})
+
+
+def test_run_command_cwd_not_a_directory(project):
+    with pytest.raises(ToolError, match="not a directory"):
+        RunCommand(project).execute({"command": "make", "cwd": "main.c"})
+
+
+def test_run_command_rejects_bad_timeout(project):
+    tool = RunCommand(project)
+    for bad in ("soon", 0, -5, True):
+        with pytest.raises(ToolError, match="timeout must be a positive integer"):
+            tool.execute({"command": "make", "timeout": bad})
+
+
+def test_run_command_timeout_is_capped(project, monkeypatch):
+    seen = {}
+
+    def fake(argv, cwd, timeout=300):
+        seen["timeout"] = timeout
+        return CommandResult(tuple(argv), 0)
+
+    monkeypatch.setattr("ferrum.builtin_tools.run_command", fake)
+    RunCommand(project, Config(command_timeout=7)).execute(
+        {"command": "make", "timeout": 999}
+    )
+    assert seen["timeout"] == 7
+
+
+@pytest.mark.skipif(os.name != "nt", reason="windows command-line semantics")
+def test_split_command_keeps_windows_backslashes():
+    from ferrum.builtin_tools import _split_command
+
+    assert _split_command("clang -IC:\\src\\inc main.c") == [
+        "clang",
+        "-IC:\\src\\inc",
+        "main.c",
+    ]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="windows command-line semantics")
+def test_split_command_strips_windows_quotes():
+    from ferrum.builtin_tools import _split_command
+
+    assert _split_command('gcc -o "my main" main.c') == [
+        "gcc",
+        "-o",
+        "my main",
+        "main.c",
+    ]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="posix shell semantics")
+def test_split_command_posix_quotes():
+    from ferrum.builtin_tools import _split_command
+
+    assert _split_command('gcc -o "my main" main.c') == [
+        "gcc",
+        "-o",
+        "my main",
+        "main.c",
+    ]

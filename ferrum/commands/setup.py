@@ -36,7 +36,7 @@ def run(console: Console, profile: str | None = None) -> int:
         _print_needs_terminal()
         return EXIT_ERROR
     profile, current = _setup_target(profile)
-    if current is None:
+    if profile is None or current is None:
         return EXIT_ERROR
 
     print(f"Ferrum setup — {profile} profile, Enter keeps [brackets].")

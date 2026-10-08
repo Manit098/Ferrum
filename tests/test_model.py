@@ -45,7 +45,9 @@ def _set_urlopen(monkeypatch, func):
 
 
 def test_content_only_response(monkeypatch):
-    _set_urlopen(monkeypatch, lambda req, timeout: FakeResponse(_message_response("hello")))
+    _set_urlopen(
+        monkeypatch, lambda req, timeout: FakeResponse(_message_response("hello"))
+    )
     response = _provider().complete([{"role": "user", "content": "hi"}], [])
     assert response.content == "hello"
     assert response.tool_calls == []
@@ -308,9 +310,7 @@ def test_payload_contains_model_messages_and_tools(monkeypatch):
 
     _set_urlopen(monkeypatch, spy)
     tools = [{"type": "function", "function": {"name": "t", "parameters": {}}}]
-    _provider(api_key="s3cret").complete(
-        [{"role": "user", "content": "hi"}], tools
-    )
+    _provider(api_key="s3cret").complete([{"role": "user", "content": "hi"}], tools)
     payload = captured["payload"]
     assert payload["model"] == "test-model"
     assert payload["messages"] == [{"role": "user", "content": "hi"}]
@@ -379,9 +379,7 @@ def test_list_models_sends_auth_when_key_given(monkeypatch):
 
 
 def test_extract_bare_json_call():
-    content = (
-        "Inspecting first: " '{"name": "read_file", "arguments": {"path": "main.c"}}'
-    )
+    content = 'Inspecting first: {"name": "read_file", "arguments": {"path": "main.c"}}'
     calls = extract_tool_calls(content)
     assert len(calls) == 1
     assert calls[0].name == "read_file"
@@ -397,7 +395,9 @@ def test_extract_fenced_call_with_parameters_key():
 
 
 def test_extract_json_string_arguments():
-    content = json.dumps({"name": "read_file", "arguments": json.dumps({"path": "a.c"})})
+    content = json.dumps(
+        {"name": "read_file", "arguments": json.dumps({"path": "a.c"})}
+    )
     calls = extract_tool_calls(content)
     assert calls[0].arguments == {"path": "a.c"}
 
@@ -439,8 +439,7 @@ def test_extract_empty_content():
 
 def test_extract_envelope_with_function_name():
     content = (
-        '{"type": "function", "function": "read_file", '
-        '"parameters": {"path": "a.c"}}'
+        '{"type": "function", "function": "read_file", "parameters": {"path": "a.c"}}'
     )
     calls = extract_tool_calls(content)
     assert len(calls) == 1
@@ -449,7 +448,9 @@ def test_extract_envelope_with_function_name():
 
 
 def test_extract_schema_only_arguments_flagged():
-    content = '{"name": "read_file", "arguments": {"type": "string", "required": ["path"]}}'
+    content = (
+        '{"name": "read_file", "arguments": {"type": "string", "required": ["path"]}}'
+    )
     calls = extract_tool_calls(content)
     assert MALFORMED_JSON in calls[0].arguments
 

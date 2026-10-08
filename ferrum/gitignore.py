@@ -129,5 +129,3 @@ def ancestor_rules(root: Path, start: Path) -> list[Rule]:
         base = "/".join(rel.parts[:i]) or "."
         rules.extend(load_rules(root.joinpath(*rel.parts[:i]), base))
     return rules
-
-

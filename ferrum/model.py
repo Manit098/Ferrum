@@ -160,7 +160,8 @@ class OpenAICompatibleProvider(ModelProvider):
         for attempt in range(1, MAX_ATTEMPTS + 1):
             try:
                 with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                    return response.read()
+                    body: bytes = response.read()
+                    return body
             except urllib.error.HTTPError as exc:
                 wait = self._http_retry(exc, attempt)
                 if wait is None:
@@ -169,8 +170,7 @@ class OpenAICompatibleProvider(ModelProvider):
                 time.sleep(wait)
             except TimeoutError as exc:
                 raise ProviderError(
-                    f"model at {self.base_url} did not answer within "
-                    f"{self.timeout}s"
+                    f"model at {self.base_url} did not answer within {self.timeout}s"
                 ) from exc
             except urllib.error.URLError as exc:
                 if attempt >= MAX_ATTEMPTS:
@@ -180,7 +180,9 @@ class OpenAICompatibleProvider(ModelProvider):
                     ) from exc
                 log.warning(
                     "cannot reach model (attempt %d/%d), retrying: %s",
-                    attempt, MAX_ATTEMPTS, exc.reason,
+                    attempt,
+                    MAX_ATTEMPTS,
+                    exc.reason,
                 )
                 self._note(
                     f"cannot reach {self.host} — retrying"
@@ -191,7 +193,9 @@ class OpenAICompatibleProvider(ModelProvider):
                 raise ProviderError(
                     f"cannot reach model at {self.base_url}: {exc}"
                 ) from exc
-        raise ProviderError(f"cannot reach model at {self.base_url}")  # pragma: no cover
+        raise ProviderError(
+            f"cannot reach model at {self.base_url}"
+        )  # pragma: no cover
 
     def _http_retry(
         self, exc: urllib.error.HTTPError, attempt: int
@@ -203,7 +207,9 @@ class OpenAICompatibleProvider(ModelProvider):
             wait = RATE_LIMIT_BACKOFF[attempt - 1]
             log.warning(
                 "model server HTTP 429 (rate limited), waiting %ds (attempt %d/%d)",
-                wait, attempt, MAX_ATTEMPTS,
+                wait,
+                attempt,
+                MAX_ATTEMPTS,
             )
             self._note(
                 f"rate limited — waiting {wait}s (attempt {attempt}/{MAX_ATTEMPTS})"
@@ -212,7 +218,9 @@ class OpenAICompatibleProvider(ModelProvider):
         if exc.code in RETRYABLE_STATUS:
             log.warning(
                 "model server HTTP %s (attempt %d/%d), retrying",
-                exc.code, attempt, MAX_ATTEMPTS,
+                exc.code,
+                attempt,
+                MAX_ATTEMPTS,
             )
             self._note(
                 f"endpoint answered HTTP {exc.code} — retrying"

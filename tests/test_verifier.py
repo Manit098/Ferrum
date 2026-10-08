@@ -66,7 +66,8 @@ def test_detect_cmake_beats_make(tmp_path):
 def test_detect_make_when_available(tmp_path, monkeypatch):
     (tmp_path / "Makefile").write_text("all:\n", encoding="utf-8")
     monkeypatch.setattr(
-        "ferrum.verifier.shutil.which", lambda name: "/usr/bin/make" if name == "make" else None
+        "ferrum.verifier.shutil.which",
+        lambda name: "/usr/bin/make" if name == "make" else None,
     )
     label, builds, tests = Verifier(tmp_path).detect()
     assert label == "make"
@@ -111,7 +112,9 @@ def test_detect_clang_reports_missing_compiler(tmp_path, monkeypatch):
 
 def test_detect_python_with_pytest(tmp_path, monkeypatch):
     (tmp_path / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
-    monkeypatch.setattr("ferrum.verifier.importlib.util.find_spec", lambda name: object())
+    monkeypatch.setattr(
+        "ferrum.verifier.importlib.util.find_spec", lambda name: object()
+    )
     label, builds, tests = Verifier(tmp_path).detect()
     assert label == "python"
     assert builds == []
@@ -163,7 +166,9 @@ def test_verify_stops_after_build_failure(tmp_path):
 
 def test_verify_pytest_exit_5_counts_as_no_tests(tmp_path, monkeypatch):
     (tmp_path / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
-    monkeypatch.setattr("ferrum.verifier.importlib.util.find_spec", lambda name: object())
+    monkeypatch.setattr(
+        "ferrum.verifier.importlib.util.find_spec", lambda name: object()
+    )
 
     def runner(cmd, cwd, timeout):
         return CommandResult(tuple(cmd), 5, stdout="no tests ran")
@@ -184,7 +189,21 @@ def test_outcome_without_commands_is_not_verified():
     assert VerifyOutcome(label="none").verified is False
 
 
-def test_clang_fallback_real_compile(tmp_path):
+@pytest.fixture
+def no_make(monkeypatch):
+    """Hide make so detect() takes the direct-compile path on any machine.
+
+    Without this, an installed make wins as soon as a Makefile exists and
+    the direct-compiler branch never runs.
+    """
+    real_which = shutil.which
+    monkeypatch.setattr(
+        "ferrum.verifier.shutil.which",
+        lambda name: None if name == "make" else real_which(name),
+    )
+
+
+def test_clang_fallback_real_compile(tmp_path, no_make):
     if not shutil.which("clang"):
         pytest.skip("clang not installed")
     (tmp_path / "Makefile").write_text("all:\n", encoding="utf-8")
@@ -198,17 +217,19 @@ def test_clang_fallback_real_compile(tmp_path):
     assert "clang" in outcome.builds[0].cmd[0]
 
 
-def test_clang_fallback_real_compile_failure(tmp_path):
+def test_clang_fallback_real_compile_failure(tmp_path, no_make):
     if not shutil.which("clang"):
         pytest.skip("clang not installed")
     (tmp_path / "Makefile").write_text("all:\n", encoding="utf-8")
-    (tmp_path / "main.c").write_text("int main(void){ this is broken }\n", encoding="utf-8")
+    (tmp_path / "main.c").write_text(
+        "int main(void){ this is broken }\n", encoding="utf-8"
+    )
     outcome = Verifier(tmp_path, timeout=60).verify()
     assert outcome.verified is False
     assert "FAIL" in outcome.report()
 
 
-def test_example_c_project_verifies():
+def test_example_c_project_verifies(no_make):
     if not shutil.which("clang"):
         pytest.skip("clang not installed")
     from pathlib import Path

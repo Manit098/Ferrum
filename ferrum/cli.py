@@ -134,7 +134,7 @@ def _dispatch(args: argparse.Namespace, console: Console) -> int:
 
     if args.dry_run:
         print(
-            "error: --dry-run only applies to: ferrum fix --dry-run \"<task>\"",
+            'error: --dry-run only applies to: ferrum fix --dry-run "<task>"',
             file=sys.stderr,
         )
         return EXIT_ERROR
@@ -171,11 +171,13 @@ def _force_utf8_streams() -> None:
     # piped. Line buffering keeps stdout and stderr in the order they were
     # written, so `ferrum ... | tee log` still reads top to bottom.
     for stream in (sys.stdout, sys.stderr):
+        # reconfigure only exists on TextIOWrapper, not on a redirected pipe.
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
         try:
-            stream.reconfigure(
-                encoding="utf-8", errors="replace", line_buffering=True
-            )
-        except (AttributeError, ValueError, OSError):
+            reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
+        except (ValueError, OSError):
             pass
 
 

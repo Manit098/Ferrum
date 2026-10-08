@@ -56,27 +56,30 @@ def load(path: Path) -> dict[str, object]:
     return data
 
 
-def save(path: Path, data: dict) -> None:
+def save(path: Path, data: dict[str, object]) -> None:
     """Write the file whole; parents are created on the way."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
-def is_legacy(data: dict) -> bool:
+def is_legacy(data: dict[str, object]) -> bool:
     """Flat files from before profiles: the string settings sat at the top."""
     return any(key in data for key in STR_FIELDS)
 
 
-def migrate(data: dict) -> dict:
+def migrate(data: dict[str, object]) -> dict[str, object]:
     """Fold a flat file into the profile its base_url points at."""
     if not is_legacy(data):
         return data
     url = data.get("base_url")
-    profile = DEFAULT_PROFILE if not isinstance(url, str) else (
-        DEFAULT_PROFILE if is_local_endpoint(url) else PROFILES[1]
+    profile = (
+        DEFAULT_PROFILE
+        if not isinstance(url, str)
+        else (DEFAULT_PROFILE if is_local_endpoint(url) else PROFILES[1])
     )
     out = {key: value for key, value in data.items() if key in INT_FIELDS}
-    merged = dict(out.get(profile, {}))
+    existing = out.get(profile)
+    merged: dict[str, object] = dict(existing) if isinstance(existing, dict) else {}
     for key in STR_FIELDS:
         if data.get(key):
             merged[key] = data[key]
@@ -86,7 +89,7 @@ def migrate(data: dict) -> dict:
     return out
 
 
-def validate(data: dict, path: Path) -> None:
+def validate(data: dict[str, object], path: Path) -> None:
     """Reject anything the settings layer would misread later."""
     for key, value in data.items():
         if key in INT_FIELDS:

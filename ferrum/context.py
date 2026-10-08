@@ -244,7 +244,10 @@ def limit_entries(entries: list[FileEntry], config: Config) -> list[FileEntry]:
     limited: list[FileEntry] = []
     total = 0
     for entry in entries:
-        if len(limited) >= config.max_files or total + entry.size > config.max_context_bytes:
+        if (
+            len(limited) >= config.max_files
+            or total + entry.size > config.max_context_bytes
+        ):
             break
         limited.append(entry)
         total += entry.size

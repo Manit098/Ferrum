@@ -13,6 +13,7 @@ from ferrum.config import (
     LOCAL_PRESET_URL,
     PROFILES,
     STR_FIELDS,
+    Config,
     ConfigError,
     config_file_path,
     load_config,
@@ -89,7 +90,13 @@ def show() -> int:
     return EXIT_OK
 
 
-def _displayed(config, stored, name, key, active) -> tuple[str, str]:
+def _displayed(
+    config: Config,
+    stored: dict[str, dict[str, str]],
+    name: str,
+    key: str,
+    active: str,
+) -> tuple[str, str]:
     """Value and source for one row: the active profile resolves, others show."""
     if name == active:
         value = getattr(config, key)
@@ -105,8 +112,7 @@ def get(key: str) -> int:
     known = {**STR_FIELDS, **INT_FIELDS}
     if key not in known:
         print(
-            f"error: unknown setting {key!r}; choose from: "
-            + ", ".join(sorted(known)),
+            f"error: unknown setting {key!r}; choose from: " + ", ".join(sorted(known)),
             file=sys.stderr,
         )
         return EXIT_ERROR
@@ -187,10 +193,11 @@ def preset(kind: str, rest: list[str]) -> int:
         print(note, file=sys.stderr)
     if kind == "cloud":
         _warn_if_cloud_key_missing()
-    print("next: ferrum config setup    (api key and model, guided)",
-          file=sys.stderr)
-    print("  or: ferrum config models   then  ferrum config set model <name>",
-          file=sys.stderr)
+    print("next: ferrum config setup    (api key and model, guided)", file=sys.stderr)
+    print(
+        "  or: ferrum config models   then  ferrum config set model <name>",
+        file=sys.stderr,
+    )
     return EXIT_OK
 
 
@@ -211,7 +218,7 @@ def _warn_if_cloud_key_missing() -> None:
 # -- shared helpers -------------------------------------------------------
 
 
-def _load():
+def _load() -> Config | None:
     """The active profile's settings, or None after reporting the problem."""
     try:
         return load_config()
@@ -225,5 +232,3 @@ def _env_override_note(key: str) -> str | None:
     if var and os.environ.get(var):
         return f"note: {var} is set in the environment and overrides the file"
     return None
-
-

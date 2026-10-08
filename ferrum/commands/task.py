@@ -36,9 +36,7 @@ def inspect_target(target: str, console: Console) -> int:
     return EXIT_OK
 
 
-def run_task(
-    task: str, *, edit: bool, dry_run: bool = False, console: Console
-) -> int:
+def run_task(task: str, *, edit: bool, dry_run: bool = False, console: Console) -> int:
     """`ferrum "<task>"` or `ferrum fix "<task>"`: one conversation."""
     config = _load_config()
     if config is None:
@@ -84,9 +82,7 @@ def _describe_project(root: Path, config: Config, console: Console) -> ProjectCo
     host = host_of(config.base_url)
     console.step(f"model: {config.model} at {host} [{config.profile}]")
     if not config.api_key and not config.local:
-        console.step(
-            f"no api_key set for {host} — the endpoint may refuse the request"
-        )
+        console.step(f"no api_key set for {host} — the endpoint may refuse the request")
     return context
 
 
@@ -141,10 +137,10 @@ def _report_missing(config: Config, missing: list[str]) -> int:
     """Nothing to ask the model with — say so in commands the user can type."""
     print(f"error: {', '.join(missing)} is not set.", file=sys.stderr)
     print(file=sys.stderr)
-    print(f"  ferrum config setup {config.profile:<25} base_url, api_key, and model",
-          file=sys.stderr)
-    print("  ferrum config models        list models at the current endpoint",
-          file=sys.stderr)
+    print(f"  ferrum config setup {config.profile}", file=sys.stderr)
+    print("      interactive wizard: base_url, api_key, and model", file=sys.stderr)
+    print("  ferrum config models", file=sys.stderr)
+    print("      list models at the current endpoint", file=sys.stderr)
     print("  ferrum config set model <name>", file=sys.stderr)
     print(f"  (or export {', '.join(missing)}=... for this shell)", file=sys.stderr)
     _print_available_models(config)
@@ -169,11 +165,14 @@ def _provider_hint(exc: ProviderError) -> None:
     """Turn the raw endpoint failure into the one command that fixes it."""
     if isinstance(exc, AuthenticationError):
         print("  the endpoint rejected the api key:", file=sys.stderr)
-        print("    ferrum config set api_key <key>   (or: ferrum config setup)",
-              file=sys.stderr)
+        print(
+            "    ferrum config set api_key <key>   (or: ferrum config setup)",
+            file=sys.stderr,
+        )
     elif isinstance(exc, RateLimitError):
-        print("  the endpoint is rate limiting — wait a moment and retry",
-              file=sys.stderr)
+        print(
+            "  the endpoint is rate limiting — wait a moment and retry", file=sys.stderr
+        )
 
 
 def confirm(prompt: str, console: Console | None = None) -> bool:

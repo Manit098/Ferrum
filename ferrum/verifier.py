@@ -79,9 +79,7 @@ class CommandResult:
         return f"{line}\n{body}\n[exit {self.returncode}]"
 
 
-def run_command(
-    cmd: Sequence[str], cwd: Path, timeout: int = 300
-) -> CommandResult:
+def run_command(cmd: Sequence[str], cwd: Path, timeout: int = 300) -> CommandResult:
     cmd = tuple(cmd)
     started = time.perf_counter()
     try:
@@ -96,7 +94,10 @@ def run_command(
             check=False,
         )
         return CommandResult(
-            cmd, proc.returncode, proc.stdout, proc.stderr,
+            cmd,
+            proc.returncode,
+            proc.stdout,
+            proc.stderr,
             time.perf_counter() - started,
         )
     except FileNotFoundError:
@@ -158,8 +159,7 @@ class Verifier:
         if (root / "CMakeLists.txt").exists():
             return (
                 "cmake",
-                [["cmake", "-S", ".", "-B", "build"],
-                 ["cmake", "--build", "build"]],
+                [["cmake", "-S", ".", "-B", "build"], ["cmake", "--build", "build"]],
                 [["ctest", "--test-dir", "build", "--output-on-failure"]],
             )
         if (root / "Makefile").exists() or (root / "makefile").exists():
@@ -182,10 +182,15 @@ class Verifier:
         header_dirs: set[str] = set()
         has_cxx = False
         for path in self.root.rglob("*"):
-            if not path.is_file() or path.suffix not in C_SOURCES | CXX_SOURCES | HEADER_SUFFIXES:
+            if (
+                not path.is_file()
+                or path.suffix not in C_SOURCES | CXX_SOURCES | HEADER_SUFFIXES
+            ):
                 continue
             rel = path.relative_to(self.root)
-            if any(part in SKIP_DIRS for part in rel.parts) or is_denied(rel):
+            if any(part in SKIP_DIRS for part in rel.parts) or is_denied(
+                rel.as_posix()
+            ):
                 continue
             posix = rel.as_posix()
             if path.suffix in HEADER_SUFFIXES:
@@ -200,7 +205,10 @@ class Verifier:
         candidates = ["clang++", "g++", "c++"] if has_cxx else ["clang", "gcc", "cc"]
         compiler = next((c for c in candidates if shutil.which(c)), candidates[0])
         suffix = ".exe" if sys.platform == "win32" else ""
-        out = Path(tempfile.gettempdir()) / f"ferrum_verify_{uuid.uuid4().hex[:8]}{suffix}"
+        out = (
+            Path(tempfile.gettempdir())
+            / f"ferrum_verify_{uuid.uuid4().hex[:8]}{suffix}"
+        )
         cmd = [compiler]
         for directory in sorted(d for d in header_dirs if d):
             cmd.append(f"-I{directory}")
