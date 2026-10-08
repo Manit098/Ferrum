@@ -86,13 +86,9 @@ PROFILE_ENV = "FERRUM_PROFILE"
 def config_file_path() -> Path:
     if sys.platform == "win32":
         base = os.environ.get("APPDATA")
-        root = Path(base) if base else Path.home() / ".config"
     else:
-        root = (
-            Path(os.environ.get("XDG_CONFIG_HOME"))
-            if os.environ.get("XDG_CONFIG_HOME")
-            else Path.home() / ".config"
-        )
+        base = os.environ.get("XDG_CONFIG_HOME")
+    root = Path(base) if base else Path.home() / ".config"
     return root / "ferrum" / "config.json"
 
 

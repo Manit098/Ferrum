@@ -108,6 +108,16 @@ def test_find_project_root_walks_up(tmp_path):
     assert find_project_root(deep) == root.resolve()
 
 
+def test_find_project_root_matches_capitalised_marker(tmp_path):
+    # Marker names are lowercase in PROJECT_MARKERS; a real Cargo.toml or
+    # Makefile must still match on a case-sensitive filesystem.
+    root = tmp_path / "proj"
+    deep = root / "src" / "deep"
+    deep.mkdir(parents=True)
+    (root / "Cargo.toml").write_text("[package]\n", encoding="utf-8")
+    assert find_project_root(deep) == root.resolve()
+
+
 def test_find_project_root_falls_back_to_start(tmp_path):
     lonely = tmp_path / "lonely"
     lonely.mkdir()

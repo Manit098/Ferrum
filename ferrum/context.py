@@ -162,9 +162,18 @@ def find_project_root(start: Path) -> Path:
     """Nearest directory at or above start holding a project marker."""
     start = Path(start).resolve()
     for candidate in (start, *start.parents):
-        if any((candidate / marker).exists() for marker in PROJECT_MARKERS):
+        if _has_project_marker(candidate):
             return candidate
     return start
+
+
+def _has_project_marker(directory: Path) -> bool:
+    """Case-insensitive, so `Makefile` counts on Linux and not only on Windows."""
+    try:
+        names = {entry.name.lower() for entry in directory.iterdir()}
+    except OSError:
+        return False
+    return any(marker in names for marker in PROJECT_MARKERS)
 
 
 def _language_of(name: str) -> Language | None:

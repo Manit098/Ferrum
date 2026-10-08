@@ -18,7 +18,10 @@ jobs:
       - run: uv sync
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run mypy
+      # mypy narrows sys.platform, so check both sides: a branch that only
+      # exists on one platform is otherwise never type-checked anywhere.
+      - run: uv run mypy --platform linux
+      - run: uv run mypy --platform win32
 
   test:
     strategy:
