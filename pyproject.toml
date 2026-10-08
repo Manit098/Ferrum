@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ferrum-cli"  
+dynamic = ["version"]
+description = "A lightweight coding harness for low-level and systems programming: inspect, understand, patch, verify."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "Ferrum contributors" }]
+keywords = ["cli", "systems-programming", "c", "cpp", "rust", "assembly"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Debuggers",
+]
+dependencies = []
+
+[project.scripts]
+ferrum = "ferrum.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.9"]
+
+[tool.setuptools.packages.find]
+include = ["ferrum*"]
+
+[tool.setuptools.package-data]
+ferrum = ["prompts/*.md"]
+
+[tool.setuptools.dynamic]
+version = { attr = "ferrum.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88

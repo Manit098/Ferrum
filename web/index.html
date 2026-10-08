@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ferrum — the coding assistant that shows its work</title>
+  <meta name="description" content="Ferrum is a small command-line assistant for C, C++, Rust, and Python projects. It reads your code, shows every change as a diff, and only says a fix is verified when the build really passed.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script>document.documentElement.className += " js";</script>
+</head>
+<body>
+
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="wordmark" href="#top">ferrum<span class="version">0.1.0</span></a>
+      <nav class="nav-links" aria-label="Page sections">
+        <a href="#how">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#usage">Usage</a>
+        <a class="nav-cta" href="#install">Install</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+
+    <section class="hero container">
+      <div class="hero-copy">
+        <h1>The coding assistant that shows its work.</h1>
+        <p class="lede">
+          Ferrum is a small command-line tool for C, C++, Rust, and Python
+          projects. It reads your code before it answers, shows every change
+          as a diff for your approval, and never says a fix is verified
+          unless the build or tests actually passed.
+        </p>
+        <div class="hero-actions">
+          <a class="button" href="#install">Install Ferrum</a>
+          <button class="copy-inline" data-copy="uvx --from ferrum-cli ferrum doctor" type="button">
+            <code>uvx --from ferrum-cli ferrum doctor</code>
+            <span class="copy-label">Copy</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="terminal" aria-label="Example Ferrum session">
+        <div class="terminal-caption">a real session — an off-by-one bug, found and proven fixed</div>
+        <!-- Lines are kept on one source line: inside <pre>, a newline
+             between spans would render as a blank terminal row. -->
+        <pre class="terminal-body" id="session"><span class="t-line"><span class="prompt">$</span> ferrum fix "sum prints 14 instead of 15"</span><span class="t-line dim">Ferrum &gt; reading main.c...</span><span class="t-line dim">Ferrum &gt; reading Makefile...</span><span class="t-line dim">Ferrum &gt; proposing a patch to main.c...</span><span class="t-line">@@ -5,7 +5,7 @@</span><span class="t-line">-    for (size_t i = 1; i &lt; count; i++) {</span><span class="t-line add">+    for (size_t i = 0; i &lt; count; i++) {</span><span class="t-line"> </span><span class="t-line"><span class="prompt">Apply patch?</span> [y/N] y</span><span class="t-line dim">--- build: PASS (clang)</span><span class="t-line verified">&#10003; Fix verified</span></pre>
+      </div>
+    </section>
+
+    <section class="section container" id="how">
+      <h2>How it works</h2>
+      <ol class="steps">
+        <li>
+          <span class="step-number">1</span>
+          <h3>Point it at a project</h3>
+          <p>
+            Run <code>ferrum .</code> in any project folder. Ferrum maps the
+            files, languages, and build system — a read-only pass that
+            touches nothing.
+          </p>
+        </li>
+        <li>
+          <span class="step-number">2</span>
+          <h3>Ask a question or describe a bug</h3>
+          <p>
+            Ferrum investigates by opening real files and searching real
+            names, then answers with file and line references you can check.
+            In fix mode it proposes one patch at a time, as a diff.
+          </p>
+        </li>
+        <li>
+          <span class="step-number">3</span>
+          <h3>Approve, then verify</h3>
+          <p>
+            Press <kbd>y</kbd> and it applies the change, runs your build and
+            tests, and reports exactly what happened — a pass is a pass, a
+            failure is a failure, and you see the output either way.
+          </p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section container" id="features">
+      <h2>What you get</h2>
+      <dl class="features">
+        <div class="feature">
+          <dt>Reads first, writes last</dt>
+          <dd>
+            Every answer is built from files Ferrum actually opened, with
+            citations like <code>main.c:8</code> so you can verify the
+            reasoning yourself.
+          </dd>
+        </div>
+        <div class="feature">
+          <dt>Nothing changes without you</dt>
+          <dd>
+            Patches arrive as unified diffs behind a yes/no prompt. Decline,
+            and the file stays exactly as it was.
+          </dd>
+        </div>
+        <div class="feature">
+          <dt>Verification or it didn't happen</dt>
+          <dd>
+            Ferrum runs your real build — Make, Cargo, CMake, or a direct
+            compiler call — and your tests, then shows the actual output.
+          </dd>
+        </div>
+        <div class="feature">
+          <dt>Honest results</dt>
+          <dd>
+            If verification fails, Ferrum says so and exits with an error
+            code. It never dresses up an unverified guess as a fix.
+          </dd>
+        </div>
+        <div class="feature">
+          <dt>Your model, your choice</dt>
+          <dd>
+            Use Ollama on your own machine or any cloud API that speaks the
+            OpenAI format. Switch between them with one command.
+          </dd>
+        </div>
+        <div class="feature">
+          <dt>Preview before you commit</dt>
+          <dd>
+            <code>fix --dry-run</code> shows the exact patch Ferrum would
+            make — diff, diagnosis, and all — without touching a file.
+          </dd>
+        </div>
+        <div class="feature">
+          <dt>Setup in one screen</dt>
+          <dd>
+            <code>ferrum doctor</code> checks your configuration, model
+            endpoint, and compiler toolchain, and tells you plainly what is
+            ready and what is missing.
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="section container" id="usage">
+      <h2>Usage</h2>
+      <p class="section-intro">
+        Six commands cover most of what you do. Click any of them to copy.
+      </p>
+      <div class="commands">
+        <div class="command">
+          <div class="command-row">
+            <code>ferrum .</code>
+            <button class="copy" data-copy="ferrum ." type="button">Copy</button>
+          </div>
+          <p>Inspect a project: languages, build system, and files.</p>
+        </div>
+        <div class="command">
+          <div class="command-row">
+            <code>ferrum "why does sum() print 14 instead of 15?"</code>
+            <button class="copy" data-copy='ferrum "why does sum() print 14 instead of 15?"' type="button">Copy</button>
+          </div>
+          <p>Read-only diagnosis, answered with file and line references.</p>
+        </div>
+        <div class="command">
+          <div class="command-row">
+            <code>ferrum fix "make it print 15"</code>
+            <button class="copy" data-copy='ferrum fix "make it print 15"' type="button">Copy</button>
+          </div>
+          <p>Propose a patch, approve it, build, and verify.</p>
+        </div>
+        <div class="command">
+          <div class="command-row">
+            <code>ferrum fix --dry-run "make it print 15"</code>
+            <button class="copy" data-copy='ferrum fix --dry-run "make it print 15"' type="button">Copy</button>
+          </div>
+          <p>The same, but no file is ever written.</p>
+        </div>
+        <div class="command">
+          <div class="command-row">
+            <code>ferrum doctor</code>
+            <button class="copy" data-copy="ferrum doctor" type="button">Copy</button>
+          </div>
+          <p>Check configuration, endpoint, and toolchain at a glance.</p>
+        </div>
+        <div class="command">
+          <div class="command-row">
+            <code>ferrum config local</code>
+            <button class="copy" data-copy="ferrum config local" type="button">Copy</button>
+          </div>
+          <p>Switch between a local Ollama model and your cloud model (ferrum config cloud).</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section install" id="install">
+      <div class="container">
+        <h2>Install</h2>
+        <p class="section-intro">
+          Ferrum needs Python 3.10 or newer and a model endpoint — a local
+          Ollama server or any OpenAI-compatible API. Nothing else.
+        </p>
+        <div class="install-commands">
+          <div class="command accent">
+            <div class="command-row">
+              <code>uv tool install --from ferrum-cli ferrum</code>
+              <button class="copy" data-copy="uv tool install --from ferrum-cli ferrum" type="button">Copy</button>
+            </div>
+            <p>with uv</p>
+          </div>
+          <div class="command">
+            <div class="command-row">
+              <code>pip install ferrum-cli</code>
+              <button class="copy" data-copy="pip install ferrum-cli" type="button">Copy</button>
+            </div>
+            <p>with pip</p>
+          </div>
+        </div>
+        <p class="install-note">
+          Then run <code>ferrum doctor</code> — it walks you through the rest.
+          <a href="https://pypi.org/project/ferrum-cli/">View on PyPI</a>
+        </p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <span>ferrum 0.1.0</span>
+      <span class="dot" aria-hidden="true">·</span>
+      <span>Apache-2.0 license</span>
+      <span class="dot" aria-hidden="true">·</span>
+      <span>Built for systems programming</span>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

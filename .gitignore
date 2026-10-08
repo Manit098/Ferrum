@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+htmlcov/
+
+# Secrets — never commit
+.env
+.env.local
+
+# uv
+# uv.lock is tracked: it keeps contributor environments reproducible.
+
+# Example build artifacts
+examples/c_project/example
+examples/c_project/example.exe
+*.o
+*.obj
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
